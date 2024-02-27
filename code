@@ -1,0 +1,88 @@
+#include <DHT.h>
+
+#define DHTPIN 2      // Digital pin connected to the DHT sensor
+#define DHTTYPE DHT11 // DHT sensor type
+
+DHT dht(DHTPIN, DHTTYPE);
+
+const char* ssid = "your_wifi_ssid";
+const char* password = "your_wifi_password";
+
+const char* server = "api.thingspeak.com";
+String apiKey = "YOUR_THINGSPEAK_API_KEY";
+
+void setup() {
+  Serial.begin(9600);
+  delay(10);
+
+  dht.begin();
+
+  // Connect to Wi-Fi
+  Serial.println();
+  Serial.println("Connecting to Wi-Fi");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+}
+
+void loop() {
+  // Wait a few seconds between measurements.
+  delay(2000);
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  // Print temperature and humidity values to Serial Monitor
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C, Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  // Send data to ThingSpeak
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+
+    // Prepare the URL with API key
+    String url = "/update?api_key=" + apiKey;
+    url += "&field1=" + String(temperature);
+    url += "&field2=" + String(humidity);
+
+    Serial.print("Connecting to ThingSpeak...");
+    if (client.connect(server, 80)) {
+      Serial.println("Connected!");
+
+      // Make a HTTP request
+      Serial.print("Sending data to ThingSpeak...");
+      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                   "Host: " + server + "\r\n" +
+                   "Connection: close\r\n\r\n");
+      delay(1000);
+
+      // Read and print the server response
+      while (client.available()) {
+        String line = client.readStringUntil('\r');
+        Serial.print(line);
+      }
+      Serial.println();
+
+      client.stop();
+      Serial.println("Disconnected");
+    } else {
+      Serial.println("Connection to ThingSpeak failed!");
+    }
+  } else {
+    Serial.println("WiFi not connected!");
+  }
+}
